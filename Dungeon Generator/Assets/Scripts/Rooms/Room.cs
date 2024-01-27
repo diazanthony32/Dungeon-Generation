@@ -7,6 +7,6 @@ public class Room : MonoBehaviour
 
     public List<Transform> attachmentPoints = new List<Transform>();
 
-    [HideInInspector] public List<Transform> doorways = new List<Transform>();
+    //[HideInInspector] public List<Transform> doorways = new List<Transform>();
 
 }
