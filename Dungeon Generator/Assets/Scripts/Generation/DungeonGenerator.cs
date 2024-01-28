@@ -35,13 +35,13 @@ public class DungeonGenerator : MonoBehaviour
     {
         while (room.attachmentPoints.Count > 0) 
         {
-            Transform attachmentPoint = room.attachmentPoints[UnityEngine.Random.Range(0, room.attachmentPoints.Count)];
+            Transform targetAttachmentPoint = room.attachmentPoints[UnityEngine.Random.Range(0, room.attachmentPoints.Count)];
 
             // random number generation decides if an attachment point becomes a door or a wall as long as the dungeon size permits
             if (UnityEngine.Random.Range(0.0f, 1.0f) <= 0.5f && dungeonSize > 0)
             {
                 // if it CAN successfully generate a room
-                if (GenerateConnectedRoom(attachmentPoint))
+                if (GenerateConnectedRoom(targetAttachmentPoint))
                 {
                     
                 }
@@ -50,35 +50,38 @@ public class DungeonGenerator : MonoBehaviour
                 else
                 {
                     // randomly select from various walls
-                    Instantiate(attachments[UnityEngine.Random.Range(0, attachments.Count)], attachmentPoint);
+                    Instantiate(attachments[UnityEngine.Random.Range(0, attachments.Count)], targetAttachmentPoint);
                 }
             }
-            // decides to be a wall
+
+            // decides to be a wall |OR| no more rooms can be generated
             else
             {
                 // randomly select from various walls
-                Instantiate(attachments[UnityEngine.Random.Range(0, attachments.Count)], attachmentPoint);
+                Instantiate(attachments[UnityEngine.Random.Range(0, attachments.Count)], targetAttachmentPoint);
             }
 
             // removes this attachment point as one to be selected from the future
-            room.attachmentPoints.Remove(attachmentPoint);
+            room.attachmentPoints.Remove(targetAttachmentPoint);
 
         }
 
     }
 
     // 
-    bool GenerateConnectedRoom(Transform pointToConnectTo)
+    bool GenerateConnectedRoom(Transform targetAttachmentPoint)
     {
         // choose a random room from the room list
         Room newRoom = Instantiate(roomsTypes[UnityEngine.Random.Range(0, roomsTypes.Count)]).GetComponent<Room>();
-        Transform newAttachmentPoint = FindValidAttachmentPoint(newRoom, pointToConnectTo);
 
-        // room connections created successfully
-        if (newAttachmentPoint != null)
+        // get a new attachment point that has a valid room placement
+        Transform newRoomValidAttachmentPoint = FindValidAttachmentPoint(newRoom, targetAttachmentPoint);
+
+        // if a valid room position has been created successfully
+        if (newRoomValidAttachmentPoint != null)
         {
             // attach doorways to the two points between the doors
-            AttachDoorways(pointToConnectTo, newAttachmentPoint);
+            AttachDoorways(targetAttachmentPoint, newRoomValidAttachmentPoint);
             dungeonSize--;
 
             // RECURSION 4 FTW
@@ -106,9 +109,12 @@ public class DungeonGenerator : MonoBehaviour
         {
             Transform newAttachmentPoint = room.attachmentPoints[UnityEngine.Random.Range(0, room.attachmentPoints.Count)];
 
+            // found a valid room to place
             if (CheckNewRoomPlacement(room, newAttachmentPoint, pointToConnectTo))
-            { 
-                // found a valid room to place
+            {
+                // remove point from attempted positions in the future
+                room.attachmentPoints.Remove(newAttachmentPoint);
+                
                 return newAttachmentPoint;
             }
             else 
@@ -181,18 +187,15 @@ public class DungeonGenerator : MonoBehaviour
     void AttachDoorways(Transform AttachmentPoint1, Transform AttachmentPoint2) 
     {
         // randomly generate door from various doorways
-        GameObject doorway = doorways[UnityEngine.Random.Range(0, attachments.Count)];
+        GameObject doorway = doorways[UnityEngine.Random.Range(0, doorways.Count)];
 
         // parents door to target attachment points
         Transform door1 = Instantiate(doorway, AttachmentPoint1).transform;
         Transform door2 = Instantiate(doorway, AttachmentPoint2).transform;
 
-        // adds point to doorways list and removes it from avalible attachment points
-        Room room1 = AttachmentPoint1.parent.parent.GetComponent<Room>();
-        Room room2 = AttachmentPoint2.parent.parent.GetComponent<Room>();
-        
-        room1.attachmentPoints.Remove(door1);
-        room2.attachmentPoints.Remove(door2);
+        // removes points from avalible attachment points
+        //AttachmentPoint1.parent.parent.GetComponent<Room>().attachmentPoints.Remove(door1);
+        //AttachmentPoint2.parent.parent.GetComponent<Room>().attachmentPoints.Remove(door2);
     }
 
     // if somehow the dungeon is "completed" but the remaining rooms are still above 0, break down a wall and force a doorway

@@ -167,7 +167,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: b3f5720081708f84d9b2def4cbf8aa10, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  dungeonSize: 5
+  dungeonSize: 25
   spawnRooms:
   - {fileID: 5612120106738192506, guid: 9883e87a1b04e6a458314c375f4b1bf9, type: 3}
   doorways:
