@@ -1,17 +1,23 @@
 using System;
 using System.Collections.Generic;
+using System.Collections.Specialized;
+using System.Linq;
+using Unity.VisualScripting;
+using UnityEditor;
 using UnityEngine;
 
 public class DungeonGenerator : MonoBehaviour
 {
     public int dungeonSize;
 
-    public List<GameObject> spawnRooms = new List<GameObject>();
+    public GameObject[] spawnRooms;
 
-    public List<GameObject> doorways = new List<GameObject>();
-    public List<GameObject> attachments = new List<GameObject>();
+    public GameObject[] doorways;
+    public GameObject[] attachments;
     
-    public List<GameObject> roomsTypes = new List<GameObject>();
+    public GameObject[] roomsTypes;
+
+    List<Room> allRooms = new List<Room>();
 
     // Start is called before the first frame update
     void Start()
@@ -23,16 +29,34 @@ public class DungeonGenerator : MonoBehaviour
     void GenerateDungeon() 
     {
         // choose a random starting room
-        Room spawnRoom = Instantiate(spawnRooms[UnityEngine.Random.Range(0, spawnRooms.Count)]).GetComponent<Room>();
+        Room spawnRoom = Instantiate(spawnRooms[UnityEngine.Random.Range(0, spawnRooms.Length)]).GetComponent<Room>();
 
-        // assign attachment points randomly
+        // assign attachment points "randomly"
         AssignAttachmentPoints(spawnRoom);
 
+        // Once generation is done, check for a successfully generated dungeon
+        if (dungeonSize == 0)
+        {
+            // sorts all the rooms in the dungeon by their floodValue from Highest to lowest
+            allRooms =  allRooms.OrderByDescending(room => room.floodValue).ToList();
+
+            // Spawns a Marker to visually indicate the final/furthest room and logs it to console
+            // credit to : https://manuel-rauber.com/2021/12/29/set-inspector/
+            var iconContent = EditorGUIUtility.IconContent("sv_label_6");
+            EditorGUIUtility.SetIconForObject(allRooms[0].gameObject, (Texture2D)iconContent.image);
+
+            allRooms[0].gameObject.name = "Boss Room";
+
+            Debug.Log("Furthest Room is " + allRooms[0].floodValue + " rooms away from the spawn room...");
+        }
     }
 
     // iterate through all the attachment points in a given room
     void AssignAttachmentPoints(Room room) 
     {
+        // adds room to list of generated rooms
+        allRooms.Add(room);
+
         while (room.attachmentPoints.Count > 0) 
         {
             Transform targetAttachmentPoint = room.attachmentPoints[UnityEngine.Random.Range(0, room.attachmentPoints.Count)];
@@ -50,7 +74,7 @@ public class DungeonGenerator : MonoBehaviour
                 else
                 {
                     // randomly select from various walls
-                    Instantiate(attachments[UnityEngine.Random.Range(0, attachments.Count)], targetAttachmentPoint);
+                    Instantiate(attachments[UnityEngine.Random.Range(0, attachments.Length)], targetAttachmentPoint);
                 }
             }
 
@@ -58,7 +82,7 @@ public class DungeonGenerator : MonoBehaviour
             else
             {
                 // randomly select from various walls
-                Instantiate(attachments[UnityEngine.Random.Range(0, attachments.Count)], targetAttachmentPoint);
+                Instantiate(attachments[UnityEngine.Random.Range(0, attachments.Length)], targetAttachmentPoint);
             }
 
             // removes this attachment point as one to be selected from the future
@@ -72,7 +96,7 @@ public class DungeonGenerator : MonoBehaviour
     bool GenerateConnectedRoom(Transform targetAttachmentPoint)
     {
         // choose a random room from the room list
-        Room newRoom = Instantiate(roomsTypes[UnityEngine.Random.Range(0, roomsTypes.Count)]).GetComponent<Room>();
+        Room newRoom = Instantiate(roomsTypes[UnityEngine.Random.Range(0, roomsTypes.Length)]).GetComponent<Room>();
 
         // get a new attachment point that has a valid room placement
         Transform newRoomValidAttachmentPoint = FindValidAttachmentPoint(newRoom, targetAttachmentPoint);
@@ -84,7 +108,10 @@ public class DungeonGenerator : MonoBehaviour
             AttachDoorways(targetAttachmentPoint, newRoomValidAttachmentPoint);
             dungeonSize--;
 
-            // RECURSION 4 FTW
+            // increase room distance from spawn by 1 more than the previous room
+            newRoom.floodValue = targetAttachmentPoint.GetComponentInParent<Room>().floodValue + 1;
+            
+            // ROOM RECURSION GENERATION BEGINS HERE
             AssignAttachmentPoints(newRoom);
 
             return true;
@@ -92,6 +119,10 @@ public class DungeonGenerator : MonoBehaviour
         // room type had no valid connection points
         else 
         {
+            // destroys unusable room gameobject
+            GameObject.Destroy(newRoom.gameObject);
+
+            // TO-DO:
             // choose another room not already checked
         }
 
@@ -123,7 +154,7 @@ public class DungeonGenerator : MonoBehaviour
                 attemptedPoints.Add(newAttachmentPoint);
                 room.attachmentPoints.Remove(newAttachmentPoint);
 
-                Debug.Log("Connection #" + attemptedPoints.Count + " unsuccessful trying new point");
+                /*Debug.Log("Connection #" + attemptedPoints.Count + " unsuccessful trying new point");*/
             }
         }
 
@@ -172,9 +203,14 @@ public class DungeonGenerator : MonoBehaviour
         parent.rotation = child.rotation;
 
         //moves the parent by the child's original offset from the parent
-        parent.position += -parent.right * attachmentlocalPosition.x;
+        parent.position = Vector3Int.RoundToInt(parent.position += -parent.right * attachmentlocalPosition.x);
+        parent.position = Vector3Int.RoundToInt(parent.position += -parent.up * attachmentlocalPosition.y);
+        parent.position = Vector3Int.RoundToInt(parent.position += -parent.forward * attachmentlocalPosition.z);
+
+        // USE THIS INSTEAD IF ABOVE IS GIVING ISSUES (uses raw numbers instead of rounding)--------------------------------------------------------------------------------
+        /*parent.position += -parent.right * attachmentlocalPosition.x;
         parent.position += -parent.up * attachmentlocalPosition.y;
-        parent.position += -parent.forward * attachmentlocalPosition.z;
+        parent.position += -parent.forward * attachmentlocalPosition.z;*/
 
         //resets local rotation, undoing step 2
         child.localRotation = attachmentlocalRotation;
@@ -187,15 +223,11 @@ public class DungeonGenerator : MonoBehaviour
     void AttachDoorways(Transform AttachmentPoint1, Transform AttachmentPoint2) 
     {
         // randomly generate door from various doorways
-        GameObject doorway = doorways[UnityEngine.Random.Range(0, doorways.Count)];
+        GameObject doorway = doorways[UnityEngine.Random.Range(0, doorways.Length)];
 
         // parents door to target attachment points
         Transform door1 = Instantiate(doorway, AttachmentPoint1).transform;
         Transform door2 = Instantiate(doorway, AttachmentPoint2).transform;
-
-        // removes points from avalible attachment points
-        //AttachmentPoint1.parent.parent.GetComponent<Room>().attachmentPoints.Remove(door1);
-        //AttachmentPoint2.parent.parent.GetComponent<Room>().attachmentPoints.Remove(door2);
     }
 
     // if somehow the dungeon is "completed" but the remaining rooms are still above 0, break down a wall and force a doorway
@@ -210,9 +242,4 @@ public class DungeonGenerator : MonoBehaviour
         
     }
 
-    // attempts to close any unused existing doorways and open attachment points with walls
-    void SealUpChamber() 
-    { 
-    
-    }
 }
