@@ -17,11 +17,17 @@ public class DungeonGenerator : MonoBehaviour
     
     public GameObject[] roomsTypes;
 
-    List<Room> allRooms = new List<Room>();
+    public List<Room> allRooms = new List<Room>();
+
+    public List<Room> mainPath = new List<Room>();
+
+    LineRenderer lineRenderer;
 
     // Start is called before the first frame update
     void Start()
     {
+        lineRenderer = GetComponent<LineRenderer>();
+
         GenerateDungeon();
     }
 
@@ -38,16 +44,54 @@ public class DungeonGenerator : MonoBehaviour
         if (dungeonSize == 0)
         {
             // sorts all the rooms in the dungeon by their floodValue from Highest to lowest
-            allRooms =  allRooms.OrderByDescending(room => room.floodValue).ToList();
+            Room furthestRoom =  allRooms.OrderByDescending(room => room.floodValue).ToList()[0];
 
+            //---------------------------------------------------------------------------------------------------------------------------- 1
             // Spawns a Marker to visually indicate the final/furthest room and logs it to console
             // credit to : https://manuel-rauber.com/2021/12/29/set-inspector/
             var iconContent = EditorGUIUtility.IconContent("sv_label_6");
-            EditorGUIUtility.SetIconForObject(allRooms[0].gameObject, (Texture2D)iconContent.image);
+            EditorGUIUtility.SetIconForObject(furthestRoom.gameObject, (Texture2D)iconContent.image);
 
-            allRooms[0].gameObject.name = "Boss Room";
+            furthestRoom.gameObject.name = "Boss Room";
 
-            Debug.Log("Furthest Room is " + allRooms[0].floodValue + " rooms away from the spawn room...");
+            // --------------------------------------------------------------------------------------------------------------------------- 1
+
+            Debug.Log("Furthest Room is " + furthestRoom.floodValue + " rooms away from the spawn room...");
+
+            // finding the main path
+            for (int i = allRooms.IndexOf(furthestRoom); i >= 0; i--)
+            {
+                bool shouldAdd = true;
+                
+                foreach (Room room in mainPath)
+                {
+                    if (allRooms[i].floodValue == room.floodValue)
+                    {
+                        shouldAdd = false; 
+                        break;
+                    }
+                }
+                
+                if (shouldAdd)
+                {
+                    mainPath.Add(allRooms[i]);
+                }
+                
+            }
+
+            // re-organizes list by flood value acending
+            mainPath = mainPath.OrderBy(room => room.floodValue).ToList();
+
+            // --------------------------------------------------------------------------------------------------------------------------- 2
+
+            // line renderer shenanagians
+            lineRenderer.positionCount = mainPath.Count;
+            for (int x = 0; x < mainPath.Count; x++)
+            {
+                lineRenderer.SetPosition(x, mainPath[x].transform.position + (Vector3.up * 1));
+            }
+
+            // ---------------------------------------------------------------------------------------------------------------------------- 2 
         }
     }
 
