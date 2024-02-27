@@ -51,10 +51,10 @@ PrefabInstance:
     - target: {fileID: -1646432713100242888, guid: 7a2a18f99117c864db88df35eb4c0acb, type: 3}
       propertyPath: m_Materials.Array.data[0]
       value: 
-      objectReference: {fileID: 2100000, guid: 33fc6f527b31b3144a29da80812aa6ee, type: 2}
+      objectReference: {fileID: 2100000, guid: b3e6dddd3130ee84181865ad7d6b2761, type: 2}
     - target: {fileID: 919132149155446097, guid: 7a2a18f99117c864db88df35eb4c0acb, type: 3}
       propertyPath: m_Name
-      value: Door
+      value: _Basic Door
       objectReference: {fileID: 0}
     m_RemovedComponents: []
     m_RemovedGameObjects: []

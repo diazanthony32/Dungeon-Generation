@@ -38,7 +38,7 @@ RenderSettings:
   m_ReflectionIntensity: 1
   m_CustomReflection: {fileID: 0}
   m_Sun: {fileID: 705507994}
-  m_IndirectSpecularColor: {r: 0.44657898, g: 0.4964133, b: 0.5748178, a: 1}
+  m_IndirectSpecularColor: {r: 0.4465788, g: 0.49641287, b: 0.5748173, a: 1}
   m_UseRadianceAmbientProbe: 0
 --- !u!157 &3
 LightmapSettings:
@@ -168,17 +168,17 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: b3f5720081708f84d9b2def4cbf8aa10, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  dungeonSize: 25
-  spawnRooms:
-  - {fileID: 5612120106738192506, guid: 9883e87a1b04e6a458314c375f4b1bf9, type: 3}
-  doorways:
+  dungeonSize: 15
+  spawnTiles:
+  - {fileID: 7277683259204700840, guid: 9883e87a1b04e6a458314c375f4b1bf9, type: 3}
+  connectors:
   - {fileID: 8724050044740350096, guid: 24280967a4a1dc7409d7630a3144c413, type: 3}
-  attachments:
+  blockers:
   - {fileID: 4988519591190296038, guid: d5793810a476d6c4f8f7a11e07ba2e7b, type: 3}
-  roomsTypes:
-  - {fileID: 5612120106738192506, guid: 9883e87a1b04e6a458314c375f4b1bf9, type: 3}
-  allRooms: []
-  mainPath: []
+  allTiles:
+  - {fileID: 7277683259204700840, guid: 9883e87a1b04e6a458314c375f4b1bf9, type: 3}
+  - {fileID: 849563630722120447, guid: b34003fc9b55a480097954803af624e3, type: 3}
+  pauseBeweenRooms: 0.5
 --- !u!120 &464321242
 LineRenderer:
   serializedVersion: 2

@@ -1,8 +1,7 @@
 using System;
+using System.Collections;
 using System.Collections.Generic;
-using System.Collections.Specialized;
 using System.Linq;
-using Unity.VisualScripting;
 using UnityEditor;
 using UnityEngine;
 
@@ -10,16 +9,21 @@ public class DungeonGenerator : MonoBehaviour
 {
     public int dungeonSize;
 
-    public GameObject[] spawnRooms;
+    [Header("Root/Spawn")]
+    public GameObject[] spawnTiles;
 
-    public GameObject[] doorways;
-    public GameObject[] attachments;
-    
-    public GameObject[] roomsTypes;
+    [Header("Attachments")]
+    public GameObject[] connectors;
+    public GameObject[] blockers;
 
-    public List<Room> allRooms = new List<Room>();
+    [Header("Tile Sets")]
+    public GameObject[] allTiles;
 
-    public List<Room> mainPath = new List<Room>();
+    [Range(0.0f, 5.0f)]
+    public float pauseBeweenRooms = 0;
+
+    private List<Room> allRooms = new List<Room>();
+    private List<Room> mainPath = new List<Room>();
 
     LineRenderer lineRenderer;
 
@@ -29,109 +33,68 @@ public class DungeonGenerator : MonoBehaviour
         lineRenderer = GetComponent<LineRenderer>();
 
         GenerateDungeon();
+
+        //AssignDungeon();
     }
 
 
     void GenerateDungeon() 
     {
         // choose a random starting room
-        Room spawnRoom = Instantiate(spawnRooms[UnityEngine.Random.Range(0, spawnRooms.Length)]).GetComponent<Room>();
+        Room spawnRoom = Instantiate(spawnTiles[UnityEngine.Random.Range(0, spawnTiles.Length)]).GetComponent<Room>();
 
         // assign attachment points "randomly"
-        AssignAttachmentPoints(spawnRoom);
-
-        // Once generation is done, check for a successfully generated dungeon
-        if (dungeonSize == 0)
-        {
-            // sorts all the rooms in the dungeon by their floodValue from Highest to lowest
-            Room furthestRoom =  allRooms.OrderByDescending(room => room.floodValue).ToList()[0];
-
-            //---------------------------------------------------------------------------------------------------------------------------- 1
-            // Spawns a Marker to visually indicate the final/furthest room and logs it to console
-            // credit to : https://manuel-rauber.com/2021/12/29/set-inspector/
-            var iconContent = EditorGUIUtility.IconContent("sv_label_6");
-            EditorGUIUtility.SetIconForObject(furthestRoom.gameObject, (Texture2D)iconContent.image);
-
-            furthestRoom.gameObject.name = "Boss Room";
-
-            // --------------------------------------------------------------------------------------------------------------------------- 1
-
-            Debug.Log("Furthest Room is " + furthestRoom.floodValue + " rooms away from the spawn room...");
-
-            // finding the main path
-            for (int i = allRooms.IndexOf(furthestRoom); i >= 0; i--)
-            {
-                bool shouldAdd = true;
-                
-                foreach (Room room in mainPath)
-                {
-                    if (allRooms[i].floodValue == room.floodValue)
-                    {
-                        shouldAdd = false; 
-                        break;
-                    }
-                }
-                
-                if (shouldAdd)
-                {
-                    mainPath.Add(allRooms[i]);
-                }
-                
-            }
-
-            // re-organizes list by flood value acending
-            mainPath = mainPath.OrderBy(room => room.floodValue).ToList();
-
-            // --------------------------------------------------------------------------------------------------------------------------- 2
-
-            // line renderer shenanagians
-            lineRenderer.positionCount = mainPath.Count;
-            for (int x = 0; x < mainPath.Count; x++)
-            {
-                lineRenderer.SetPosition(x, mainPath[x].transform.position + (Vector3.up * 1));
-            }
-
-            // ---------------------------------------------------------------------------------------------------------------------------- 2 
-        }
+        StartCoroutine(AssignAttachmentPoints(spawnRoom));
+        //AssignAttachmentPoints(spawnRoom);
     }
 
     // iterate through all the attachment points in a given room
-    void AssignAttachmentPoints(Room room) 
+    IEnumerator AssignAttachmentPoints(Room room) 
     {
         // adds room to list of generated rooms
         allRooms.Add(room);
 
         while (room.attachmentPoints.Count > 0) 
         {
+            //choose a random remaining attactment point
             Transform targetAttachmentPoint = room.attachmentPoints[UnityEngine.Random.Range(0, room.attachmentPoints.Count)];
 
+            //wait
+            yield return new WaitForSeconds(pauseBeweenRooms);
+
             // random number generation decides if an attachment point becomes a door or a wall as long as the dungeon size permits
-            if (UnityEngine.Random.Range(0.0f, 1.0f) <= 0.5f && dungeonSize > 0)
+            if (UnityEngine.Random.Range(0.0f, 1.0f) <= 0.80f && dungeonSize > 0)
             {
+                Debug.LogWarning("Attempt Creation of a Connecting Room @ " + targetAttachmentPoint.parent.parent.name+ ":"+ targetAttachmentPoint.name);
+
                 // if it CAN successfully generate a room
                 if (GenerateConnectedRoom(targetAttachmentPoint))
                 {
-                    
+
                 }
 
                 // if it CANT successfully generate a room, make a wall instead
                 else
                 {
+                    Debug.LogError("ERR01 : Failed Attempt of a Connecting Room @ " + targetAttachmentPoint.parent.parent.name + ":" + targetAttachmentPoint.name);
+
                     // randomly select from various walls
-                    Instantiate(attachments[UnityEngine.Random.Range(0, attachments.Length)], targetAttachmentPoint);
+                    Instantiate(blockers[UnityEngine.Random.Range(0, blockers.Length)], targetAttachmentPoint);
                 }
             }
 
             // decides to be a wall |OR| no more rooms can be generated
             else
             {
+                Debug.Log("Placing a Wall @ " + targetAttachmentPoint.parent.parent.name + ":" + targetAttachmentPoint.name);
+
                 // randomly select from various walls
-                Instantiate(attachments[UnityEngine.Random.Range(0, attachments.Length)], targetAttachmentPoint);
+                Instantiate(blockers[UnityEngine.Random.Range(0, blockers.Length)], targetAttachmentPoint);
             }
 
             // removes this attachment point as one to be selected from the future
             room.attachmentPoints.Remove(targetAttachmentPoint);
-
+            Debug.Log("REMOVED : " + targetAttachmentPoint.name + " @ " + targetAttachmentPoint.parent.parent.name);
         }
 
     }
@@ -140,7 +103,7 @@ public class DungeonGenerator : MonoBehaviour
     bool GenerateConnectedRoom(Transform targetAttachmentPoint)
     {
         // choose a random room from the room list
-        Room newRoom = Instantiate(roomsTypes[UnityEngine.Random.Range(0, roomsTypes.Length)]).GetComponent<Room>();
+        Room newRoom = Instantiate(allTiles[UnityEngine.Random.Range(0, allTiles.Length)]).GetComponent<Room>();
 
         // get a new attachment point that has a valid room placement
         Transform newRoomValidAttachmentPoint = FindValidAttachmentPoint(newRoom, targetAttachmentPoint);
@@ -154,9 +117,10 @@ public class DungeonGenerator : MonoBehaviour
 
             // increase room distance from spawn by 1 more than the previous room
             newRoom.floodValue = targetAttachmentPoint.GetComponentInParent<Room>().floodValue + 1;
-            
+
             // ROOM RECURSION GENERATION BEGINS HERE
-            AssignAttachmentPoints(newRoom);
+            StartCoroutine(AssignAttachmentPoints(newRoom));
+            //AssignAttachmentPoints(newRoom);
 
             return true;
         }
@@ -187,18 +151,23 @@ public class DungeonGenerator : MonoBehaviour
             // found a valid room to place
             if (CheckNewRoomPlacement(room, newAttachmentPoint, pointToConnectTo))
             {
+                Debug.LogWarning("Attached Connecting Room @ " + newAttachmentPoint.parent.parent.name + ":" + newAttachmentPoint.name);
+
                 // remove point from attempted positions in the future
                 room.attachmentPoints.Remove(newAttachmentPoint);
-                
+
+                // adds attempted points back to original list to be sorted through afterwards
+                room.attachmentPoints.AddRange(attemptedPoints);
+
                 return newAttachmentPoint;
             }
             else 
             {
+                Debug.Log("Connection #" + attemptedPoints.Count + " to" + newAttachmentPoint.parent.parent.name + " : " + newAttachmentPoint + " unsuccessful trying new point");
+
                 // add point to the new attempted list and remove point from existing list and try again
                 attemptedPoints.Add(newAttachmentPoint);
                 room.attachmentPoints.Remove(newAttachmentPoint);
-
-                /*Debug.Log("Connection #" + attemptedPoints.Count + " unsuccessful trying new point");*/
             }
         }
 
@@ -212,8 +181,8 @@ public class DungeonGenerator : MonoBehaviour
         AdjustParentToChildTargetTransform(room.transform, newAttachmentPoint, pointToConnectTo);
 
         // checking if room placement is valid if not change attachment point
-        Collider[] collisions = Physics.OverlapBox(room.transform.position, room.GetComponentInChildren<Collider>().bounds.max);
-        if (collisions.Length == 0)
+        bool collisions = Physics.CheckBox(room.transform.position, room.GetComponentInChildren<Collider>().bounds.size / 2, room.transform.rotation);
+        if (!collisions)
         {
             // room successfully has been placed
             return true;
@@ -224,54 +193,102 @@ public class DungeonGenerator : MonoBehaviour
 
     void AdjustParentToChildTargetTransform(Transform parent, Transform child, Transform target) 
     {
-        // stores the inital position of the attachment point
-        Vector3 attachmentlocalPosition = child.localPosition;
-        Quaternion attachmentlocalRotation = child.localRotation;
+        // Store initial local position and rotation of the child
+        Vector3 attachmentLocalPosition = child.localPosition;
+        Quaternion attachmentLocalRotation = child.localRotation;
 
-        // sets child to desired position
-        // copys target transform, rotates it by 180 and offsets it by 2 units
-        child.position = target.position;
+        // Set child to desired position and rotation
+        child.position = target.position + (-target.forward * 2);
         child.rotation = Quaternion.Euler(target.rotation.eulerAngles.x, target.rotation.eulerAngles.y + 180, target.rotation.eulerAngles.z);
-        child.position += child.transform.forward * 2;
 
-        //move the parent to child's position
+        // Move the parent to child's position
         parent.position = child.position;
 
-        // HAS TO BE IN THIS ORDER
-        //sort of "reverses" the quaternion so that the local rotation is 0 if it is equal to the original local rotation
-        child.RotateAround(child.position, child.forward, -attachmentlocalRotation.eulerAngles.z);
-        child.RotateAround(child.position, child.right, -attachmentlocalRotation.eulerAngles.x);
-        child.RotateAround(child.position, child.up, -attachmentlocalRotation.eulerAngles.y);
+        // Calculate the reverse rotation
+        Quaternion reverseRotation = Quaternion.Inverse(attachmentLocalRotation);
 
-        //rotate the parent
+        // Rotate the child and parent
+        child.RotateAround(child.position, child.forward, reverseRotation.eulerAngles.z);
+        child.RotateAround(child.position, child.right, reverseRotation.eulerAngles.x);
+        child.RotateAround(child.position, child.up, reverseRotation.eulerAngles.y);
+
         parent.rotation = child.rotation;
 
-        //moves the parent by the child's original offset from the parent
-        parent.position = Vector3Int.RoundToInt(parent.position += -parent.right * attachmentlocalPosition.x);
-        parent.position = Vector3Int.RoundToInt(parent.position += -parent.up * attachmentlocalPosition.y);
-        parent.position = Vector3Int.RoundToInt(parent.position += -parent.forward * attachmentlocalPosition.z);
+        // Adjust parent position
+        parent.position -= parent.right * attachmentLocalPosition.x;
+        parent.position -= parent.up * attachmentLocalPosition.y;
+        parent.position -= parent.forward * attachmentLocalPosition.z;
 
-        // USE THIS INSTEAD IF ABOVE IS GIVING ISSUES (uses raw numbers instead of rounding)--------------------------------------------------------------------------------
-        /*parent.position += -parent.right * attachmentlocalPosition.x;
-        parent.position += -parent.up * attachmentlocalPosition.y;
-        parent.position += -parent.forward * attachmentlocalPosition.z;*/
-
-        //resets local rotation, undoing step 2
-        child.localRotation = attachmentlocalRotation;
-
-        //reset local position
-        child.localPosition = attachmentlocalPosition;
+        // Reset local position and rotation of the child
+        child.SetLocalPositionAndRotation(attachmentLocalPosition, attachmentLocalRotation);
     }
 
     // adds a doorway to the room and adds it to the room's door list
     void AttachDoorways(Transform AttachmentPoint1, Transform AttachmentPoint2) 
     {
         // randomly generate door from various doorways
-        GameObject doorway = doorways[UnityEngine.Random.Range(0, doorways.Length)];
+        GameObject doorway = connectors[UnityEngine.Random.Range(0, connectors.Length)];
 
         // parents door to target attachment points
         Transform door1 = Instantiate(doorway, AttachmentPoint1).transform;
         Transform door2 = Instantiate(doorway, AttachmentPoint2).transform;
+    }
+
+    void AssignDungeon()
+    {
+        // Once generation is done, check for a successfully generated dungeon
+        if (dungeonSize == 0)
+        {
+            // sorts all the rooms in the dungeon by their floodValue from Highest to lowest
+            Room furthestRoom = allRooms.OrderByDescending(room => room.floodValue).ToList()[0];
+
+            //---------------------------------------------------------------------------------------------------------------------------- 1
+            // Spawns a Marker to visually indicate the final/furthest room and logs it to console
+            // credit to : https://manuel-rauber.com/2021/12/29/set-inspector/
+            var iconContent = EditorGUIUtility.IconContent("sv_label_6");
+            EditorGUIUtility.SetIconForObject(furthestRoom.gameObject, (Texture2D)iconContent.image);
+
+            furthestRoom.gameObject.name = "Boss Room";
+
+            // --------------------------------------------------------------------------------------------------------------------------- 1
+
+            Debug.Log("Furthest Room is " + furthestRoom.floodValue + " rooms away from the spawn room...");
+
+            // finding the main path
+            for (int i = allRooms.IndexOf(furthestRoom); i >= 0; i--)
+            {
+                bool shouldAdd = true;
+
+                foreach (Room room in mainPath)
+                {
+                    if (allRooms[i].floodValue == room.floodValue)
+                    {
+                        shouldAdd = false;
+                        break;
+                    }
+                }
+
+                if (shouldAdd)
+                {
+                    mainPath.Add(allRooms[i]);
+                }
+
+            }
+
+            // re-organizes list by flood value acending
+            mainPath = mainPath.OrderBy(room => room.floodValue).ToList();
+
+            // --------------------------------------------------------------------------------------------------------------------------- 2
+
+            // line renderer shenanagians
+            lineRenderer.positionCount = mainPath.Count;
+            for (int x = 0; x < mainPath.Count; x++)
+            {
+                lineRenderer.SetPosition(x, mainPath[x].transform.position + (Vector3.up * 1));
+            }
+
+            // ---------------------------------------------------------------------------------------------------------------------------- 2 
+        }
     }
 
     // if somehow the dungeon is "completed" but the remaining rooms are still above 0, break down a wall and force a doorway
