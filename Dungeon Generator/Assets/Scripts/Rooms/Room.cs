@@ -3,15 +3,26 @@ using UnityEngine;
 
 public class Room : MonoBehaviour
 {
-    public int floodValue;
+    public bool isRotatable = true;
+
+    public enum RepeatMode{
+        allow,
+        disallowImmediate,
+        disallow
+    }
+    public RepeatMode repeatMode;
 
     public List<Transform> attachmentPoints = new List<Transform>();
 
-    private int spawnTime;
+    [HideInInspector] public List<Transform> doorways = new List<Transform>();
 
-    void Awake()
+    [HideInInspector] public int floodValue;
+
+    private int frameTime;
+
+    private void Awake()
     {
-        spawnTime = Time.frameCount;
+        frameTime = Time.frameCount;
     }
 
     //Draw the Box Overlap as a gizmo to show where it currently is testing. Click the Gizmos button to see this
@@ -19,8 +30,7 @@ public class Room : MonoBehaviour
     {
         Gizmos.color = Color.yellow;
         Gizmos.matrix = transform.localToWorldMatrix;
-
-        // Gizmos.DrawWireCube uses full box size, not half size like Phycis.OverlapBox, so we x2
-        Gizmos.DrawWireCube(Vector3.zero, GetComponentInChildren<Collider>().bounds.size);
+        
+        Gizmos.DrawWireCube(Vector3.zero, GetComponentInChildren<BoxCollider>().size);
     }
 }

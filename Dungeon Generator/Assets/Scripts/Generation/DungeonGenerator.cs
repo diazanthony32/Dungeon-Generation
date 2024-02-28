@@ -10,7 +10,7 @@ public class DungeonGenerator : MonoBehaviour
     public int dungeonSize;
 
     [Header("Root/Spawn")]
-    public GameObject[] spawnTiles;
+    public GameObject spawnTile;
 
     [Header("Attachments")]
     public GameObject[] connectors;
@@ -19,155 +19,164 @@ public class DungeonGenerator : MonoBehaviour
     [Header("Tile Sets")]
     public GameObject[] allTiles;
 
-    [Range(0.0f, 5.0f)]
+    [Range(0.0f, 1.0f)]
     public float pauseBeweenRooms = 0;
+
+    public float tilePadding = 0;
+    public AnimationCurve roomChanceCurve;
 
     private List<Room> allRooms = new List<Room>();
     private List<Room> mainPath = new List<Room>();
 
     LineRenderer lineRenderer;
 
+    private void Awake()
+    {
+        lineRenderer = GetComponent<LineRenderer>();
+    }
+
     // Start is called before the first frame update
     void Start()
     {
-        lineRenderer = GetComponent<LineRenderer>();
-
-        GenerateDungeon();
-
-        //AssignDungeon();
+        StartCoroutine(GenerateDungeon());
     }
 
 
-    void GenerateDungeon() 
+    IEnumerator GenerateDungeon() 
     {
-        // choose a random starting room
-        Room spawnRoom = Instantiate(spawnTiles[UnityEngine.Random.Range(0, spawnTiles.Length)]).GetComponent<Room>();
+        // spawn the starting room and add it to the total rooms list
+        Room spawnRoom = Instantiate(spawnTile).GetComponent<Room>();
+        allRooms.Add(spawnRoom);
 
         // assign attachment points "randomly"
-        StartCoroutine(AssignAttachmentPoints(spawnRoom));
-        //AssignAttachmentPoints(spawnRoom);
+        yield return StartCoroutine(AssignAttachmentPoints(spawnRoom));
+
+        EvaluateDungeon();
     }
 
     // iterate through all the attachment points in a given room
     IEnumerator AssignAttachmentPoints(Room room) 
     {
-        // adds room to list of generated rooms
-        allRooms.Add(room);
+        // stores the original amount of attachment points in a tile
+        int totalPointCount = room.attachmentPoints.Count;
 
+        // iterates through all the attachment points in a tile
         while (room.attachmentPoints.Count > 0) 
         {
-            //choose a random remaining attactment point
+            // choose a random remaining attactment point
             Transform targetAttachmentPoint = room.attachmentPoints[UnityEngine.Random.Range(0, room.attachmentPoints.Count)];
+         
+            // waiting in between generation steps
+            // small native delay to prevent items from spawning on top of eachother with 0 delay
+            yield return new WaitForSeconds(pauseBeweenRooms + 0.05f);
 
-            //wait
-            yield return new WaitForSeconds(pauseBeweenRooms);
-
-            // random number generation decides if an attachment point becomes a door or a wall as long as the dungeon size permits
-            if (UnityEngine.Random.Range(0.0f, 1.0f) <= 0.80f && dungeonSize > 0)
+            // if more rooms can be generated, allow attempts. Otherwise place a blocker
+            if (dungeonSize > 0)
             {
-                Debug.LogWarning("Attempt Creation of a Connecting Room @ " + targetAttachmentPoint.parent.parent.name+ ":"+ targetAttachmentPoint.name);
+                // uses an animation curve to determine the likelyhood of a door to be created and spawned in
+                // with every successful connection created in a tile, the less likely-hood of another being made 
+                float chance = roomChanceCurve.Evaluate((float)room.doorways.Count / (float)totalPointCount);
 
-                // if it CAN successfully generate a room
-                if (GenerateConnectedRoom(targetAttachmentPoint))
+                Debug.Log(chance);
+
+                if (UnityEngine.Random.Range(0.00f, 1.00f) <= chance)
                 {
+                    Room newTile = FindValidTile(targetAttachmentPoint);
 
+                    if (newTile != null)
+                    {
+                        // increase new tile distance from spawn by 1
+                        // adds new tile to room list
+                        newTile.floodValue = room.floodValue + 1;
+                        allRooms.Add(newTile);
+
+                        dungeonSize--;
+
+                        // ROOM RECURSION GENERATION BEGINS HERE
+                        yield return StartCoroutine(AssignAttachmentPoints(newTile));
+                    }
+                    else
+                    {
+                        // randomly select from various blockers
+                        Instantiate(blockers[UnityEngine.Random.Range(0, blockers.Length)], targetAttachmentPoint);
+                    }
                 }
-
-                // if it CANT successfully generate a room, make a wall instead
                 else
                 {
-                    Debug.LogError("ERR01 : Failed Attempt of a Connecting Room @ " + targetAttachmentPoint.parent.parent.name + ":" + targetAttachmentPoint.name);
-
-                    // randomly select from various walls
+                    // randomly select from various blockers
                     Instantiate(blockers[UnityEngine.Random.Range(0, blockers.Length)], targetAttachmentPoint);
                 }
             }
-
-            // decides to be a wall |OR| no more rooms can be generated
             else
             {
-                Debug.Log("Placing a Wall @ " + targetAttachmentPoint.parent.parent.name + ":" + targetAttachmentPoint.name);
-
-                // randomly select from various walls
+                // randomly select from various blocker
                 Instantiate(blockers[UnityEngine.Random.Range(0, blockers.Length)], targetAttachmentPoint);
             }
 
-            // removes this attachment point as one to be selected from the future
+            // removes this attachment point from being selected
             room.attachmentPoints.Remove(targetAttachmentPoint);
-            Debug.Log("REMOVED : " + targetAttachmentPoint.name + " @ " + targetAttachmentPoint.parent.parent.name);
         }
 
     }
 
     // 
-    bool GenerateConnectedRoom(Transform targetAttachmentPoint)
+    Room FindValidTile(Transform targetAttachmentPoint)
     {
-        // choose a random room from the room list
-        Room newRoom = Instantiate(allTiles[UnityEngine.Random.Range(0, allTiles.Length)]).GetComponent<Room>();
+        // choose a random tile
+        Room newTile = Instantiate(allTiles[UnityEngine.Random.Range(0, allTiles.Length)]).GetComponent<Room>();
 
-        // get a new attachment point that has a valid room placement
-        Transform newRoomValidAttachmentPoint = FindValidAttachmentPoint(newRoom, targetAttachmentPoint);
+        // TO DO:
+        // go through tile list to find a tile that might work
+
+        // get an attachment point in in the new tile that has a valid room placement
+        Transform validAttachmentPoint = FindValidAttachmentPoint(newTile, targetAttachmentPoint);
 
         // if a valid room position has been created successfully
-        if (newRoomValidAttachmentPoint != null)
+        if (validAttachmentPoint != null)
         {
             // attach doorways to the two points between the doors
-            AttachDoorways(targetAttachmentPoint, newRoomValidAttachmentPoint);
-            dungeonSize--;
+            AttachDoorways(targetAttachmentPoint, validAttachmentPoint);
 
-            // increase room distance from spawn by 1 more than the previous room
-            newRoom.floodValue = targetAttachmentPoint.GetComponentInParent<Room>().floodValue + 1;
-
-            // ROOM RECURSION GENERATION BEGINS HERE
-            StartCoroutine(AssignAttachmentPoints(newRoom));
-            //AssignAttachmentPoints(newRoom);
-
-            return true;
-        }
-        // room type had no valid connection points
-        else 
-        {
-            // destroys unusable room gameobject
-            GameObject.Destroy(newRoom.gameObject);
-
-            // TO-DO:
-            // choose another room not already checked
+            return newTile;
         }
 
-        return false;
+        // destroys unusable tile
+        GameObject.Destroy(newTile.gameObject);
+
+        return null;
 
     }
 
-    // only deals with choosing a attachment point in newly generated room to connect to previous room's attachment point
-    Transform FindValidAttachmentPoint(Room room, Transform pointToConnectTo)
+    // Iterates through attachment points in room to connect to previous room's attachment point
+    Transform FindValidAttachmentPoint(Room tile, Transform targetAttachmentPoint)
     {
         // list to remember which points have been attempted as not to try them again
         List<Transform> attemptedPoints = new List<Transform>();
 
-        while (room.attachmentPoints.Count > 0)
+        while (tile.attachmentPoints.Count > 0)
         {
-            Transform newAttachmentPoint = room.attachmentPoints[UnityEngine.Random.Range(0, room.attachmentPoints.Count)];
+            Transform attachmentPoint = tile.attachmentPoints[UnityEngine.Random.Range(0, tile.attachmentPoints.Count)];
 
             // found a valid room to place
-            if (CheckNewRoomPlacement(room, newAttachmentPoint, pointToConnectTo))
+            if (CheckTilePlacement(tile.transform, attachmentPoint, targetAttachmentPoint))
             {
-                Debug.LogWarning("Attached Connecting Room @ " + newAttachmentPoint.parent.parent.name + ":" + newAttachmentPoint.name);
+                //Debug.LogWarning("Attached Connecting Room @ " + newAttachmentPoint.parent.parent.name + ":" + newAttachmentPoint.name);
 
                 // remove point from attempted positions in the future
-                room.attachmentPoints.Remove(newAttachmentPoint);
+                tile.attachmentPoints.Remove(attachmentPoint);
 
                 // adds attempted points back to original list to be sorted through afterwards
-                room.attachmentPoints.AddRange(attemptedPoints);
+                tile.attachmentPoints.AddRange(attemptedPoints);
 
-                return newAttachmentPoint;
+                return attachmentPoint;
             }
             else 
             {
-                Debug.Log("Connection #" + attemptedPoints.Count + " to" + newAttachmentPoint.parent.parent.name + " : " + newAttachmentPoint + " unsuccessful trying new point");
+                //Debug.Log("Connection #" + attemptedPoints.Count + " to" + newAttachmentPoint.parent.parent.name + " : " + newAttachmentPoint + " unsuccessful trying new point");
 
                 // add point to the new attempted list and remove point from existing list and try again
-                attemptedPoints.Add(newAttachmentPoint);
-                room.attachmentPoints.Remove(newAttachmentPoint);
+                attemptedPoints.Add(attachmentPoint);
+                tile.attachmentPoints.Remove(attachmentPoint);
             }
         }
 
@@ -175,52 +184,73 @@ public class DungeonGenerator : MonoBehaviour
     }
 
     // verifies the placement of a room by checking if a room is NOT overlapping another placed room
-    bool CheckNewRoomPlacement(Room room, Transform newAttachmentPoint, Transform pointToConnectTo)
+    bool CheckTilePlacement(Transform tile, Transform attachmentPoint, Transform pointToConnectTo)
     {
         //Rotates room to align selected attachment points next to eachother
-        AdjustParentToChildTargetTransform(room.transform, newAttachmentPoint, pointToConnectTo);
+        AdjustParentToChildTargetTransform(tile, attachmentPoint, pointToConnectTo);
 
-        // checking if room placement is valid if not change attachment point
-        bool collisions = Physics.CheckBox(room.transform.position, room.GetComponentInChildren<Collider>().bounds.size / 2, room.transform.rotation);
-        if (!collisions)
+        Collider[] hitColliders = Physics.OverlapBox(tile.position, tile.GetComponent<BoxCollider>().size / 2, tile.rotation);
+
+        //Check when there is a new collider coming into contact with the tile
+        for (int i = 0; i < hitColliders.Length; i++)
         {
-            // room successfully has been placed
-            return true;
+            if (hitColliders[i].gameObject != tile.gameObject)
+            {
+                //Debug.Log("Hit : " + hitColliders[i].gameObject.name);
+                return false;
+            }
         }
 
-        return false;
+        return true;
     }
 
     void AdjustParentToChildTargetTransform(Transform parent, Transform child, Transform target) 
     {
-        // Store initial local position and rotation of the child
-        Vector3 attachmentLocalPosition = child.localPosition;
-        Quaternion attachmentLocalRotation = child.localRotation;
+        //// Store initial local position and rotation of the child
+        //Vector3 attachmentLocalPosition = child.localPosition;
+        //Quaternion attachmentLocalRotation = child.localRotation;
+
+        //// Set child to desired position and rotation
+        //child.position = target.position + (-target.forward * 2);
+        //child.rotation = Quaternion.Euler(target.rotation.eulerAngles.x, target.rotation.eulerAngles.y + 180, target.rotation.eulerAngles.z);
+
+        //// Move the parent to child's position
+        //parent.position = child.position;
+
+        //// Calculate the reverse rotation
+        //Quaternion reverseRotation = Quaternion.Inverse(attachmentLocalRotation);
+
+        //// Rotate the child and parent
+        //child.RotateAround(child.position, child.forward, reverseRotation.eulerAngles.z);
+        //child.RotateAround(child.position, child.right, reverseRotation.eulerAngles.x);
+        //child.RotateAround(child.position, child.up, reverseRotation.eulerAngles.y);
+
+        //parent.rotation = child.rotation;
+
+        //// Adjust parent position
+        //parent.position -= parent.right * attachmentLocalPosition.x;
+        //parent.position -= parent.up * attachmentLocalPosition.y;
+        //parent.position -= parent.forward * attachmentLocalPosition.z;
+
+        //// Reset local position and rotation of the child
+        //child.SetLocalPositionAndRotation(attachmentLocalPosition, attachmentLocalRotation);
+
+        //------------------------------------------------------------------------------------------------------------------------------------------
+
+        // IDK WHATS MORE PERFORMANT YET BUT THEY BOTH WORK
+        child.SetParent(null);
+        parent.SetParent(child);
 
         // Set child to desired position and rotation
-        child.position = target.position + (-target.forward * 2);
-        child.rotation = Quaternion.Euler(target.rotation.eulerAngles.x, target.rotation.eulerAngles.y + 180, target.rotation.eulerAngles.z);
+        child.position = target.position + (-target.forward * tilePadding);
 
-        // Move the parent to child's position
-        parent.position = child.position;
+        if (parent.GetComponent<Room>().isRotatable)
+        {
+            child.rotation = Quaternion.Euler(target.rotation.eulerAngles.x, target.rotation.eulerAngles.y + 180, target.rotation.eulerAngles.z);
+        }
 
-        // Calculate the reverse rotation
-        Quaternion reverseRotation = Quaternion.Inverse(attachmentLocalRotation);
-
-        // Rotate the child and parent
-        child.RotateAround(child.position, child.forward, reverseRotation.eulerAngles.z);
-        child.RotateAround(child.position, child.right, reverseRotation.eulerAngles.x);
-        child.RotateAround(child.position, child.up, reverseRotation.eulerAngles.y);
-
-        parent.rotation = child.rotation;
-
-        // Adjust parent position
-        parent.position -= parent.right * attachmentLocalPosition.x;
-        parent.position -= parent.up * attachmentLocalPosition.y;
-        parent.position -= parent.forward * attachmentLocalPosition.z;
-
-        // Reset local position and rotation of the child
-        child.SetLocalPositionAndRotation(attachmentLocalPosition, attachmentLocalRotation);
+        parent.SetParent(null);
+        child.SetParent(parent);
     }
 
     // adds a doorway to the room and adds it to the room's door list
@@ -229,13 +259,19 @@ public class DungeonGenerator : MonoBehaviour
         // randomly generate door from various doorways
         GameObject doorway = connectors[UnityEngine.Random.Range(0, connectors.Length)];
 
-        // parents door to target attachment points
+        // parents door prefab to target attachment points
         Transform door1 = Instantiate(doorway, AttachmentPoint1).transform;
         Transform door2 = Instantiate(doorway, AttachmentPoint2).transform;
+
+        // adds attachment points to doorway list
+        AttachmentPoint1.GetComponentInParent<Room>().doorways.Add(AttachmentPoint1);
+        AttachmentPoint2.GetComponentInParent<Room>().doorways.Add(AttachmentPoint2);
     }
 
-    void AssignDungeon()
+    void EvaluateDungeon()
     {
+        Debug.LogWarning("Beginning Dungeon Evalation...");
+
         // Once generation is done, check for a successfully generated dungeon
         if (dungeonSize == 0)
         {
@@ -289,18 +325,9 @@ public class DungeonGenerator : MonoBehaviour
 
             // ---------------------------------------------------------------------------------------------------------------------------- 2 
         }
+        else
+        {
+            Debug.LogError("Dungeon Evaluation Failed. \n Failed to reach the set amount of rooms in the Dungeon.");
+        }
     }
-
-    // if somehow the dungeon is "completed" but the remaining rooms are still above 0, break down a wall and force a doorway
-    void ForceDoorWay() 
-    { 
-    
-    }
-
-    // if a wall is near another wall attachment point in another room, attempt at creating a doorway
-    void AttemptLocalConnection() 
-    { 
-        
-    }
-
 }

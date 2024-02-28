@@ -168,17 +168,41 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: b3f5720081708f84d9b2def4cbf8aa10, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  dungeonSize: 15
-  spawnTiles:
-  - {fileID: 7277683259204700840, guid: 9883e87a1b04e6a458314c375f4b1bf9, type: 3}
+  dungeonSize: 25
+  spawnTile: {fileID: 7753072203849757738, guid: a10099da0b9a742b09cb5a8ab1472d33, type: 3}
   connectors:
   - {fileID: 8724050044740350096, guid: 24280967a4a1dc7409d7630a3144c413, type: 3}
   blockers:
   - {fileID: 4988519591190296038, guid: d5793810a476d6c4f8f7a11e07ba2e7b, type: 3}
   allTiles:
-  - {fileID: 7277683259204700840, guid: 9883e87a1b04e6a458314c375f4b1bf9, type: 3}
-  - {fileID: 849563630722120447, guid: b34003fc9b55a480097954803af624e3, type: 3}
-  pauseBeweenRooms: 0.5
+  - {fileID: 7753072203849757738, guid: a10099da0b9a742b09cb5a8ab1472d33, type: 3}
+  - {fileID: 4815194628429179512, guid: b34003fc9b55a480097954803af624e3, type: 3}
+  pauseBeweenRooms: 0
+  tilePadding: 2
+  roomChanceCurve:
+    serializedVersion: 2
+    m_Curve:
+    - serializedVersion: 3
+      time: 0
+      value: 0.5
+      inSlope: 0
+      outSlope: 0
+      tangentMode: 0
+      weightedMode: 0
+      inWeight: 0
+      outWeight: 0.78256756
+    - serializedVersion: 3
+      time: 1
+      value: 0.15
+      inSlope: -0.35
+      outSlope: -0.35
+      tangentMode: 34
+      weightedMode: 0
+      inWeight: 0.33333334
+      outWeight: 0
+    m_PreInfinity: 2
+    m_PostInfinity: 2
+    m_RotationOrder: 4
 --- !u!120 &464321242
 LineRenderer:
   serializedVersion: 2
@@ -432,11 +456,11 @@ Camera:
     y: 0
     width: 1
     height: 1
-  near clip plane: 0.3
+  near clip plane: 0
   far clip plane: 1000
   field of view: 60
-  orthographic: 0
-  orthographic size: 5
+  orthographic: 1
+  orthographic size: 50
   m_Depth: -1
   m_CullingMask:
     serializedVersion: 2
@@ -460,13 +484,13 @@ Transform:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 963194225}
   serializedVersion: 2
-  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
-  m_LocalPosition: {x: 0, y: 1, z: -10}
+  m_LocalRotation: {x: 0.7071068, y: 0, z: 0, w: 0.7071068}
+  m_LocalPosition: {x: 0, y: 100, z: 0}
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children: []
   m_Father: {fileID: 0}
-  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+  m_LocalEulerAnglesHint: {x: 90, y: 0, z: 0}
 --- !u!1660057539 &9223372036854775807
 SceneRoots:
   m_ObjectHideFlags: 0
