@@ -1,4 +1,3 @@
-using System;
 using System.Collections;
 using System.Collections.Generic;
 using System.Linq;
@@ -7,7 +6,11 @@ using UnityEngine;
 
 public class DungeonGenerator : MonoBehaviour
 {
-    public int dungeonSize;
+    public int dungeonSize = 25;
+    private int sizeCount;
+
+    public int maxFailedAttempts = 20;
+    private int attemptCount;
 
     [Header("Root/Spawn")]
     public GameObject spawnTile;
@@ -17,16 +20,23 @@ public class DungeonGenerator : MonoBehaviour
     public GameObject[] blockers;
 
     [Header("Tile Sets")]
-    public GameObject[] allTiles;
+    [SerializeField] public Tiles[] allTiles;
 
-    [Range(0.0f, 1.0f)]
+    [Space(10)]
+
+    [Range(0.0f, 2.5f)]
     public float pauseBeweenRooms = 0;
 
     public float tilePadding = 0;
-    public AnimationCurve roomChanceCurve;
 
-    private List<Room> allRooms = new List<Room>();
-    private List<Room> mainPath = new List<Room>();
+    [Space(10)]
+
+    public bool restrictToBounds = false;
+    public Vector3 center = Vector3.zero;
+    public Vector3 extents = new Vector3(100.0f, 25.0f, 100.0f);
+
+    private List<Tile> allRooms = new List<Tile>();
+    private List<Tile> mainPath = new List<Tile>();
 
     LineRenderer lineRenderer;
 
@@ -45,7 +55,7 @@ public class DungeonGenerator : MonoBehaviour
     IEnumerator GenerateDungeon() 
     {
         // spawn the starting room and add it to the total rooms list
-        Room spawnRoom = Instantiate(spawnTile).GetComponent<Room>();
+        Tile spawnRoom = Instantiate(spawnTile).GetComponent<Tile>();
         allRooms.Add(spawnRoom);
 
         // assign attachment points "randomly"
@@ -55,33 +65,33 @@ public class DungeonGenerator : MonoBehaviour
     }
 
     // iterate through all the attachment points in a given room
-    IEnumerator AssignAttachmentPoints(Room room) 
+    IEnumerator AssignAttachmentPoints(Tile room) 
     {
         // stores the original amount of attachment points in a tile
-        int totalPointCount = room.attachmentPoints.Count;
+        int totalPointCount = room.socketList.Count;
 
         // iterates through all the attachment points in a tile
-        while (room.attachmentPoints.Count > 0) 
+        while (room.socketList.Count > 0) 
         {
             // choose a random remaining attactment point
-            Transform targetAttachmentPoint = room.attachmentPoints[UnityEngine.Random.Range(0, room.attachmentPoints.Count)];
+            Socket targetSocket = room.socketList[Random.Range(0, room.socketList.Count)];
          
             // waiting in between generation steps
             // small native delay to prevent items from spawning on top of eachother with 0 delay
             yield return new WaitForSeconds(pauseBeweenRooms + 0.05f);
 
             // if more rooms can be generated, allow attempts. Otherwise place a blocker
-            if (dungeonSize > 0)
+            if (sizeCount < dungeonSize)
             {
                 // uses an animation curve to determine the likelyhood of a door to be created and spawned in
                 // with every successful connection created in a tile, the less likely-hood of another being made 
-                float chance = roomChanceCurve.Evaluate((float)room.doorways.Count / (float)totalPointCount);
+                float chance = room.chanceCurve.Evaluate((float)room.doorways.Count / (float)totalPointCount);
 
-                Debug.Log(chance);
+                //Debug.Log(chance);
 
-                if (UnityEngine.Random.Range(0.00f, 1.00f) <= chance)
+                if (Random.Range(0.00f, 1.00f) <= chance)
                 {
-                    Room newTile = FindValidTile(targetAttachmentPoint);
+                    Tile newTile = FindValidTile(targetSocket);
 
                     if (newTile != null)
                     {
@@ -90,7 +100,7 @@ public class DungeonGenerator : MonoBehaviour
                         newTile.floodValue = room.floodValue + 1;
                         allRooms.Add(newTile);
 
-                        dungeonSize--;
+                        sizeCount++;
 
                         // ROOM RECURSION GENERATION BEGINS HERE
                         yield return StartCoroutine(AssignAttachmentPoints(newTile));
@@ -98,44 +108,44 @@ public class DungeonGenerator : MonoBehaviour
                     else
                     {
                         // randomly select from various blockers
-                        Instantiate(blockers[UnityEngine.Random.Range(0, blockers.Length)], targetAttachmentPoint);
+                        Instantiate(blockers[Random.Range(0, blockers.Length)], targetSocket.transform);
                     }
                 }
                 else
                 {
                     // randomly select from various blockers
-                    Instantiate(blockers[UnityEngine.Random.Range(0, blockers.Length)], targetAttachmentPoint);
+                    Instantiate(blockers[Random.Range(0, blockers.Length)], targetSocket.transform);
                 }
             }
             else
             {
                 // randomly select from various blocker
-                Instantiate(blockers[UnityEngine.Random.Range(0, blockers.Length)], targetAttachmentPoint);
+                Instantiate(blockers[Random.Range(0, blockers.Length)], targetSocket.transform);
             }
 
             // removes this attachment point from being selected
-            room.attachmentPoints.Remove(targetAttachmentPoint);
+            room.socketList.Remove(targetSocket);
         }
 
     }
 
     // 
-    Room FindValidTile(Transform targetAttachmentPoint)
+    Tile FindValidTile(Socket targetSocket)
     {
         // choose a random tile
-        Room newTile = Instantiate(allTiles[UnityEngine.Random.Range(0, allTiles.Length)]).GetComponent<Room>();
+        Tile newTile = Instantiate(DetermineWeightedTileSet()).GetComponent<Tile>();
 
         // TO DO:
         // go through tile list to find a tile that might work
 
         // get an attachment point in in the new tile that has a valid room placement
-        Transform validAttachmentPoint = FindValidAttachmentPoint(newTile, targetAttachmentPoint);
+        Socket validAttachmentPoint = FindValidAttachmentPoint(newTile, targetSocket);
 
         // if a valid room position has been created successfully
         if (validAttachmentPoint != null)
         {
             // attach doorways to the two points between the doors
-            AttachDoorways(targetAttachmentPoint, validAttachmentPoint);
+            AttachDoorways(targetSocket, validAttachmentPoint);
 
             return newTile;
         }
@@ -148,25 +158,25 @@ public class DungeonGenerator : MonoBehaviour
     }
 
     // Iterates through attachment points in room to connect to previous room's attachment point
-    Transform FindValidAttachmentPoint(Room tile, Transform targetAttachmentPoint)
+    Socket FindValidAttachmentPoint(Tile tile, Socket targetAttachmentPoint)
     {
         // list to remember which points have been attempted as not to try them again
-        List<Transform> attemptedPoints = new List<Transform>();
+        List<Socket> attemptedPoints = new List<Socket>();
 
-        while (tile.attachmentPoints.Count > 0)
+        while (tile.socketList.Count > 0)
         {
-            Transform attachmentPoint = tile.attachmentPoints[UnityEngine.Random.Range(0, tile.attachmentPoints.Count)];
+            Socket attachmentPoint = tile.socketList[Random.Range(0, tile.socketList.Count)];
 
             // found a valid room to place
-            if (CheckTilePlacement(tile.transform, attachmentPoint, targetAttachmentPoint))
+            if (CheckTilePlacement(tile, attachmentPoint, targetAttachmentPoint))
             {
                 //Debug.LogWarning("Attached Connecting Room @ " + newAttachmentPoint.parent.parent.name + ":" + newAttachmentPoint.name);
 
                 // remove point from attempted positions in the future
-                tile.attachmentPoints.Remove(attachmentPoint);
+                tile.socketList.Remove(attachmentPoint);
 
                 // adds attempted points back to original list to be sorted through afterwards
-                tile.attachmentPoints.AddRange(attemptedPoints);
+                tile.socketList.AddRange(attemptedPoints);
 
                 return attachmentPoint;
             }
@@ -176,7 +186,7 @@ public class DungeonGenerator : MonoBehaviour
 
                 // add point to the new attempted list and remove point from existing list and try again
                 attemptedPoints.Add(attachmentPoint);
-                tile.attachmentPoints.Remove(attachmentPoint);
+                tile.socketList.Remove(attachmentPoint);
             }
         }
 
@@ -184,12 +194,12 @@ public class DungeonGenerator : MonoBehaviour
     }
 
     // verifies the placement of a room by checking if a room is NOT overlapping another placed room
-    bool CheckTilePlacement(Transform tile, Transform attachmentPoint, Transform pointToConnectTo)
+    bool CheckTilePlacement(Tile tile, Socket attachmentPoint, Socket pointToConnectTo)
     {
         //Rotates room to align selected attachment points next to eachother
-        AdjustParentToChildTargetTransform(tile, attachmentPoint, pointToConnectTo);
+        AdjustParentToChildTargetTransform(tile.transform, attachmentPoint.transform, pointToConnectTo.transform);
 
-        Collider[] hitColliders = Physics.OverlapBox(tile.position, tile.GetComponent<BoxCollider>().size / 2, tile.rotation);
+        Collider[] hitColliders = Physics.OverlapBox(tile.transform.position, tile.GetComponent<BoxCollider>().size / 2, tile.transform.rotation);
 
         //Check when there is a new collider coming into contact with the tile
         for (int i = 0; i < hitColliders.Length; i++)
@@ -197,6 +207,19 @@ public class DungeonGenerator : MonoBehaviour
             if (hitColliders[i].gameObject != tile.gameObject)
             {
                 //Debug.Log("Hit : " + hitColliders[i].gameObject.name);
+                return false;
+            }
+        }
+
+        if (restrictToBounds)
+        {
+            Vector3 boundary = center + extents;
+
+            if (Mathf.Abs(tile.transform.position.x) > Mathf.Abs(boundary.x) ||
+                Mathf.Abs(tile.transform.position.y) > Mathf.Abs(boundary.y) ||
+                Mathf.Abs(tile.transform.position.z) > Mathf.Abs(boundary.z)){
+
+                //Debug.LogError("Tile Position is out of allowed bounds...\n TileX:" + tile.transform.position + "\n BoundaryX: " + boundary);
                 return false;
             }
         }
@@ -244,7 +267,7 @@ public class DungeonGenerator : MonoBehaviour
         // Set child to desired position and rotation
         child.position = target.position + (-target.forward * tilePadding);
 
-        if (parent.GetComponent<Room>().isRotatable)
+        if (parent.GetComponent<Tile>().allowRotation)
         {
             child.rotation = Quaternion.Euler(target.rotation.eulerAngles.x, target.rotation.eulerAngles.y + 180, target.rotation.eulerAngles.z);
         }
@@ -254,29 +277,56 @@ public class DungeonGenerator : MonoBehaviour
     }
 
     // adds a doorway to the room and adds it to the room's door list
-    void AttachDoorways(Transform AttachmentPoint1, Transform AttachmentPoint2) 
+    void AttachDoorways(Socket socket1, Socket socket2) 
     {
         // randomly generate door from various doorways
-        GameObject doorway = connectors[UnityEngine.Random.Range(0, connectors.Length)];
+        GameObject doorway = connectors[Random.Range(0, connectors.Length)];
 
         // parents door prefab to target attachment points
-        Transform door1 = Instantiate(doorway, AttachmentPoint1).transform;
-        Transform door2 = Instantiate(doorway, AttachmentPoint2).transform;
+        Transform door1 = Instantiate(doorway, socket1.transform).transform;
+        Transform door2 = Instantiate(doorway, socket2.transform).transform;
 
         // adds attachment points to doorway list
-        AttachmentPoint1.GetComponentInParent<Room>().doorways.Add(AttachmentPoint1);
-        AttachmentPoint2.GetComponentInParent<Room>().doorways.Add(AttachmentPoint2);
+        socket1.GetComponentInParent<Tile>().doorways.Add(socket1);
+        socket2.GetComponentInParent<Tile>().doorways.Add(socket2);
+    }
+
+    GameObject DetermineWeightedTileSet()
+    {
+        // determines the total of all the weights of all the rooms
+        float totalChance = 0.0f;
+        foreach (Tiles tile in allTiles)
+        {
+            totalChance += tile.tileWeight;
+        }
+
+        // the random number determining the room that is going to spawn
+        float rand = Random.Range(0.0f, totalChance);
+        float cumulativeChance = 0.0f;
+
+        foreach (Tiles tile in allTiles)
+        {
+            cumulativeChance += tile.tileWeight;
+
+            if (cumulativeChance >= rand)
+            {
+                return tile.tilePrefab;
+            }
+        }
+
+        Debug.LogError("Failed to choose a weighted tile.");
+        return null;
     }
 
     void EvaluateDungeon()
     {
-        Debug.LogWarning("Beginning Dungeon Evalation...");
+        Debug.Log("Beginning Dungeon Evalation...");
 
         // Once generation is done, check for a successfully generated dungeon
-        if (dungeonSize == 0)
+        if (sizeCount == dungeonSize)
         {
             // sorts all the rooms in the dungeon by their floodValue from Highest to lowest
-            Room furthestRoom = allRooms.OrderByDescending(room => room.floodValue).ToList()[0];
+            Tile furthestRoom = allRooms.OrderByDescending(room => room.floodValue).ToList()[0];
 
             //---------------------------------------------------------------------------------------------------------------------------- 1
             // Spawns a Marker to visually indicate the final/furthest room and logs it to console
@@ -295,7 +345,7 @@ public class DungeonGenerator : MonoBehaviour
             {
                 bool shouldAdd = true;
 
-                foreach (Room room in mainPath)
+                foreach (Tile room in mainPath)
                 {
                     if (allRooms[i].floodValue == room.floodValue)
                     {
@@ -327,7 +377,39 @@ public class DungeonGenerator : MonoBehaviour
         }
         else
         {
-            Debug.LogError("Dungeon Evaluation Failed. \n Failed to reach the set amount of rooms in the Dungeon.");
+            Debug.LogWarning("Dungeon Evaluation Failed. \n Failed to reach the set amount of rooms in the Dungeon. Attempting generation again...");
+            ResetGeneration();
         }
     }
+
+    // used to reset dungeon generation
+    private void ResetGeneration()
+    {
+        if (attemptCount < maxFailedAttempts)
+        {
+            attemptCount++;
+
+            foreach (Tile tile in allRooms)
+            {
+                Destroy(tile.gameObject);
+            }
+
+            allRooms.Clear();
+            sizeCount = 0;
+
+            // restart generation
+            StartCoroutine(GenerateDungeon());
+        }
+        else
+        {
+            Debug.LogError("ERROR: Failed to generate a Dungeon under the Max Failed attempts in the Editor");
+        }
+    }
+}
+
+[System.Serializable]
+public class Tiles
+{   
+    public GameObject tilePrefab;
+    public float tileWeight;
 }

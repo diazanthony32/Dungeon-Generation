@@ -1,9 +1,9 @@
 using System.Collections.Generic;
 using UnityEngine;
 
-public class Room : MonoBehaviour
+public class Tile : MonoBehaviour
 {
-    public bool isRotatable = true;
+    public bool allowRotation = true;
 
     public enum RepeatMode{
         allow,
@@ -12,17 +12,17 @@ public class Room : MonoBehaviour
     }
     public RepeatMode repeatMode;
 
-    public List<Transform> attachmentPoints = new List<Transform>();
+    public AnimationCurve chanceCurve;
 
-    [HideInInspector] public List<Transform> doorways = new List<Transform>();
+    public List<Socket> socketList { get; private set; } = new List<Socket>();
+
+    [HideInInspector] public List<Socket> doorways = new List<Socket>();
 
     [HideInInspector] public int floodValue;
 
-    private int frameTime;
-
     private void Awake()
     {
-        frameTime = Time.frameCount;
+        socketList.AddRange(this.GetComponentsInChildren<Socket>());
     }
 
     //Draw the Box Overlap as a gizmo to show where it currently is testing. Click the Gizmos button to see this

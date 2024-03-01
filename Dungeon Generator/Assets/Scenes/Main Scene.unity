@@ -169,40 +169,24 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   dungeonSize: 25
+  maxFailedAttempts: 20
   spawnTile: {fileID: 7753072203849757738, guid: a10099da0b9a742b09cb5a8ab1472d33, type: 3}
   connectors:
   - {fileID: 8724050044740350096, guid: 24280967a4a1dc7409d7630a3144c413, type: 3}
   blockers:
   - {fileID: 4988519591190296038, guid: d5793810a476d6c4f8f7a11e07ba2e7b, type: 3}
   allTiles:
-  - {fileID: 7753072203849757738, guid: a10099da0b9a742b09cb5a8ab1472d33, type: 3}
-  - {fileID: 4815194628429179512, guid: b34003fc9b55a480097954803af624e3, type: 3}
+  - tilePrefab: {fileID: 7753072203849757738, guid: a10099da0b9a742b09cb5a8ab1472d33, type: 3}
+    tileWeight: 4
+  - tilePrefab: {fileID: 8925609965812480084, guid: 4847a9dd8203a450aa4210e2bf949cd7, type: 3}
+    tileWeight: 2
+  - tilePrefab: {fileID: 4815194628429179512, guid: b34003fc9b55a480097954803af624e3, type: 3}
+    tileWeight: 1
   pauseBeweenRooms: 0
   tilePadding: 2
-  roomChanceCurve:
-    serializedVersion: 2
-    m_Curve:
-    - serializedVersion: 3
-      time: 0
-      value: 0.5
-      inSlope: 0
-      outSlope: 0
-      tangentMode: 0
-      weightedMode: 0
-      inWeight: 0
-      outWeight: 0.78256756
-    - serializedVersion: 3
-      time: 1
-      value: 0.15
-      inSlope: -0.35
-      outSlope: -0.35
-      tangentMode: 34
-      weightedMode: 0
-      inWeight: 0.33333334
-      outWeight: 0
-    m_PreInfinity: 2
-    m_PostInfinity: 2
-    m_RotationOrder: 4
+  restrictToBounds: 1
+  center: {x: 0, y: 0, z: 0}
+  extents: {x: 60, y: 20, z: 60}
 --- !u!120 &464321242
 LineRenderer:
   serializedVersion: 2
